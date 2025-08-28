@@ -9,8 +9,6 @@ const io = new Server(server);
 app.use(express.static("public"));
 
 const users = {}; // { socketId: { username, avatar } }
-// { messageId: { reactionType: Set(userId) } }
-const messageReactions = {};
 
 io.on("connection", (socket) => {
   console.log("✅ User connected:", socket.id);
@@ -25,38 +23,13 @@ io.on("connection", (socket) => {
     const user = users[socket.id];
     if (!user) return;
     io.emit("chat message", {
-      id: socket.id,
+      id: Date.now().toString() + Math.random().toString(36).substr(2, 5), // unique id per message
       username: user.username,
       avatar: user.avatar,
       text: msg.text,
       time: new Date().toISOString(),
+      replyTo: msg.replyTo || null,
     });
-  });
-
-  // Reaction event
-  socket.on("reaction", ({ messageId, reaction, remove }) => {
-    if (!messageId || !reaction) return;
-    if (!messageReactions[messageId]) messageReactions[messageId] = {};
-    if (remove) {
-      // Remove this user's reaction for this emoji
-      if (messageReactions[messageId][reaction]) {
-        messageReactions[messageId][reaction].delete(socket.id);
-      }
-    } else {
-      // Remove this user's previous reaction for this message
-      for (const r in messageReactions[messageId]) {
-        messageReactions[messageId][r].delete(socket.id);
-      }
-      // Add this user's new reaction
-      if (!messageReactions[messageId][reaction]) messageReactions[messageId][reaction] = new Set();
-      messageReactions[messageId][reaction].add(socket.id);
-    }
-    // Prepare plain object for emit
-    const reactionCounts = {};
-    for (const r in messageReactions[messageId]) {
-      reactionCounts[r] = Array.from(messageReactions[messageId][r]);
-    }
-    io.emit("reaction update", { messageId, reactions: reactionCounts });
   });
 
   socket.on("edit name", ({ username: newName, avatar }) => {

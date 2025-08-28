@@ -252,130 +252,8 @@
       });
     }
 
-    // When sending new user or edit name, always send avatar
-    // Reaction click logic
-    document.getElementById("messages").addEventListener("click", function(e) {
-      if (e.target.classList.contains("reaction-btn")) {
-        const li = e.target.closest("li");
-        const messageId = li.getAttribute("data-id");
-        const reaction = e.target.getAttribute("data-reaction");
-        // If already selected, remove reaction
-        if (e.target.classList.contains('selected-reaction')) {
-          socket.emit("reaction", { messageId, reaction, remove: true });
-        } else {
-          // Change to new reaction
-          socket.emit("reaction", { messageId, reaction });
-        }
-      }
-    });
-
-    // Listen for reaction updates from server
-    socket.on("reaction update", ({ messageId, reactions }) => {
-      const li = document.querySelector(`#messages li[data-id='${messageId}']`);
-      if (!li) return;
-      const reactionsDiv = li.querySelector('.reactions');
-      if (!reactionsDiv) return;
-      let hasAny = false;
-      const isHovered = reactionsDiv.matches(':hover');
-      reactionsDiv.querySelectorAll('.reaction-btn').forEach(btn => {
-        const btnReaction = btn.getAttribute('data-reaction');
-        const users = reactions && reactions[btnReaction] ? reactions[btnReaction] : [];
-        let countSpan = btn.querySelector('.reaction-count');
-        if (users.includes(socket.id)) {
-          // Always show the selected reaction
-          btn.style.display = '';
-          countSpan.textContent = ` ${users.length}`;
-          countSpan.style.display = '';
-          btn.classList.add('selected-reaction');
-          hasAny = true;
-        } else if (isHovered) {
-          // Show other reactions only on hover
-          btn.style.display = '';
-          countSpan.textContent = '';
-          countSpan.style.display = 'none';
-          btn.classList.remove('selected-reaction');
-        } else {
-          btn.style.display = 'none';
-          countSpan.textContent = '';
-          countSpan.style.display = 'none';
-          btn.classList.remove('selected-reaction');
-        }
-      });
-      if (hasAny) {
-        reactionsDiv.classList.add('has-reaction');
-      } else {
-        reactionsDiv.classList.remove('has-reaction');
-      }
-    });
-
-    // Show all reactions on hover, revert on mouseleave
-    // document.getElementById("messages").addEventListener("mouseover", function(e) {
-    //   if (e.target.classList.contains("reactions")) {
-    //     const li = e.target.closest("li");
-    //     const messageId = li.getAttribute("data-id");
-    //     // Force update to show all reactions
-    //     const event = new CustomEvent('forceReactionUpdate', { detail: { messageId } });
-    //     window.dispatchEvent(event);
-    //   }
-    // });
-    // document.getElementById("messages").addEventListener("mouseleave", function(e) {
-    //   if (e.target.classList.contains("reactions")) {
-    //     const li = e.target.closest("li");
-    //     const messageId = li.getAttribute("data-id");
-    //     // Force update to show only selected
-    //     const event = new CustomEvent('forceReactionUpdate', { detail: { messageId } });
-    //     window.dispatchEvent(event);
-    //   }
-    // });
-    // Listen for forceReactionUpdate to re-render reactions
-    window.addEventListener('forceReactionUpdate', function(e) {
-      const { messageId } = e.detail;
-      // Re-run the update logic
-      const li = document.querySelector(`#messages li[data-id='${messageId}']`);
-      if (!li) return;
-      const reactionsDiv = li.querySelector('.reactions');
-      if (!reactionsDiv) return;
-      // Simulate a reaction update event to re-render
-      const event = new CustomEvent('reactionUpdateInternal', { detail: { messageId } });
-      window.dispatchEvent(event);
-    });
-    // Internal event to re-render reactions
-    window.addEventListener('reactionUpdateInternal', function(e) {
-      const { messageId } = e.detail;
-      // Get the latest reactions from the DOM (they are up to date)
-      // Trigger the socket.on handler again
-      const li = document.querySelector(`#messages li[data-id='${messageId}']`);
-      if (!li) return;
-      const reactionsDiv = li.querySelector('.reactions');
-      if (!reactionsDiv) return;
-      // Use the last received reactions for this message
-      // (Assume the last socket.on('reaction update') call updated the DOM)
-      // Just re-run the display logic
-      let hasAny = false;
-      const isHovered = reactionsDiv.matches(':hover');
-      reactionsDiv.querySelectorAll('.reaction-btn').forEach(btn => {
-        const btnReaction = btn.getAttribute('data-reaction');
-        let countSpan = btn.querySelector('.reaction-count');
-        // Only show selected when not hovered, all on hover
-        if (!isHovered) {
-          if (btn.classList.contains('selected-reaction')) {
-            btn.style.display = '';
-            countSpan.style.display = '';
-            hasAny = true;
-          } else {
-            btn.style.display = 'none';
-            countSpan.style.display = 'none';
-          }
-        } else {
-          btn.style.display = '';
-        }
-      });
-      if (hasAny) {
-        reactionsDiv.classList.add('has-reaction');
-      } else {
-        reactionsDiv.classList.remove('has-reaction');
-      }
-    });
+    // --- Remove all reaction-related event listeners and socket events ---
+    // (Remove code for reaction click handler, socket.on('reaction update'), forceReactionUpdate, reactionUpdateInternal, etc.)
 
     socket.on("system message", (msg) => {
       const li = document.createElement("li");
@@ -384,51 +262,76 @@
       document.getElementById("messages").appendChild(li);
     });
 
-    // Render avatars in chat messages and user list
-    socket.on("chat message", ({ id, username, avatar, text, time }) => {
+    // --- Update avatar rendering in chat messages ---
+    // --- Add reply-to-message feature ---
+    let replyToMessage = null;
+
+    function clearReplyPreview() {
+      replyToMessage = null;
+      const preview = document.getElementById('replyPreview');
+      if (preview) preview.style.display = 'none';
+    }
+
+    function setReplyPreview(message) {
+      replyToMessage = message;
+      let preview = document.getElementById('replyPreview');
+      if (!preview) {
+        preview = document.createElement('div');
+        preview.id = 'replyPreview';
+        preview.className = 'reply-preview';
+        document.querySelector('.input-area').insertAdjacentElement('beforebegin', preview);
+      }
+      preview.innerHTML = `<span class='reply-to-user'>Replying to <b>${message.username}</b>:</span> <span class='reply-to-snippet'>${message.text.slice(0, 60)}</span> <button id='cancelReplyBtn' title='Cancel reply'>&times;</button>`;
+      preview.style.display = '';
+      document.getElementById('cancelReplyBtn').onclick = clearReplyPreview;
+    }
+
+    // Modify chat message rendering to add reply button and render quoted message
+    const messageHistory = {};
+    socket.on("chat message", (msg) => {
+      messageHistory[msg.id] = msg;
       const li = document.createElement("li");
-      li.setAttribute("data-id", id);
-      if (id === socket.id) li.classList.add("self");
+      li.setAttribute("data-id", msg.id);
+      if (msg.id === socket.id) li.classList.add("self");
       // Avatar
       let avatarHTML = '';
-      if (avatar) {
-        avatarHTML = `<img class="avatar avatar-preview" src="${avatar}" alt="Avatar" style="width:32px;height:32px;">`;
+      if (msg.avatar) {
+        avatarHTML = `<img class="avatar avatar-preview" src="${msg.avatar}" alt="Avatar" style="width:44px;height:44px;">`;
       } else {
-        const initials = username.split(' ').map(w => w[0]).join('').toUpperCase().slice(0,2);
-        avatarHTML = `<span class="avatar">${initials}</span>`;
+        // Fallback SVG avatar
+        const initials = msg.username.split(' ').map(w => w[0]).join('').toUpperCase().slice(0,2);
+        avatarHTML = `<span class="avatar avatar-fallback" style="width:44px;height:44px;font-size:20px;">${initials}</span>`;
       }
-      const timeStr = time ? `<span class='msg-time'>${new Date(time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>` : '';
-      // Reactions
-      const reactions = ["👍", "❤️", "😂", "😮", "😢", "🔥"];
-      const reactionBtns = reactions.map(r => `<button class='reaction-btn' data-reaction='${r}'>${r}<span class='reaction-count' style='display:none'></span></button>`).join(' ');
-      li.innerHTML = `<div class="msg-container">${avatarHTML}<div class="msg-content"><strong class="username">${username}:</strong> ${text} ${timeStr}<div class='reactions'>${reactionBtns}</div></div></div>`;
+      const timeStr = msg.time ? `<span class='msg-time'>${new Date(msg.time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>` : '';
+      // Reply block
+      let replyBlock = '';
+      if (msg.replyTo && messageHistory[msg.replyTo]) {
+        const replied = messageHistory[msg.replyTo];
+        replyBlock = `<div class='reply-block'><span class='reply-user'>${replied.username}:</span> <span class='reply-snippet'>${replied.text.slice(0, 60)}</span></div>`;
+      }
+      // Reply button
+      const replyBtn = `<button class='reply-btn' title='Reply to this message'>↩️</button>`;
+      li.innerHTML = `<div class="msg-container">${avatarHTML}<div class="msg-content">${replyBlock}<strong class="username">${msg.username}:</strong> ${msg.text} ${timeStr}</div>${replyBtn}</div>`;
       document.getElementById("messages").appendChild(li);
       li.scrollIntoView({ behavior: "smooth" });
-      // Attach mouseenter/mouseleave to .reactions
-      const reactionsDiv = li.querySelector('.reactions');
-      if (reactionsDiv) {
-        reactionsDiv.addEventListener('mouseenter', () => {
-          const event = new CustomEvent('forceReactionUpdate', { detail: { messageId: id } });
-          window.dispatchEvent(event);
-        });
-        reactionsDiv.addEventListener('mouseleave', () => {
-          const event = new CustomEvent('forceReactionUpdate', { detail: { messageId: id } });
-          window.dispatchEvent(event);
-        });
-      }
+      // Reply button event
+      li.querySelector('.reply-btn').onclick = function(e) {
+        setReplyPreview(msg);
+        e.stopPropagation();
+      };
     });
 
-    // Update user list to show avatars
+    // --- Update avatar rendering in user list ---
     socket.on("user list", (users) => {
       const list = document.getElementById("userList");
       list.innerHTML = "";
       users.forEach(user => {
         const li = document.createElement("li");
         if (user.avatar) {
-          li.innerHTML = `<img class='avatar avatar-preview' src='${user.avatar}' alt='Avatar' style='width:22px;height:22px;margin-right:4px;'>` + user.username;
+          li.innerHTML = `<img class='avatar avatar-preview' src='${user.avatar}' alt='Avatar' style='width:32px;height:32px;margin-right:8px;'>` + user.username;
         } else {
           const initials = user.username.split(' ').map(w => w[0]).join('').toUpperCase().slice(0,2);
-          li.innerHTML = `<span class='avatar'>${initials}</span>` + user.username;
+          li.innerHTML = `<span class='avatar avatar-fallback' style='width:32px;height:32px;margin-right:8px;font-size:15px;'>${initials}</span>` + user.username;
         }
         list.appendChild(li);
       });
@@ -447,7 +350,7 @@
       });
     });
 
-    // Theme toggle logic
+    // --- Fix theme toggle logic ---
     const themeToggle = document.getElementById("themeToggle");
     function setTheme(theme) {
       if (theme === "light") {
@@ -460,10 +363,9 @@
       localStorage.setItem("theme", theme);
     }
     themeToggle.addEventListener("click", () => {
-      const isLight = document.body.classList.toggle("light-theme");
-      setTheme(isLight ? "light" : "dark");
+      const current = document.body.classList.contains("light-theme") ? "light" : "dark";
+      setTheme(current === "light" ? "dark" : "light");
     });
-    // On load, set theme from storage
     setTheme(localStorage.getItem("theme") || "dark");
 
     // Remove emojiBtn, emojiPicker, and related JS
@@ -500,12 +402,14 @@
       typingIndicator.textContent = "";
     });
 
+    // When sending, include replyTo if set
     function sendMessage() {
       const input = document.getElementById("messageInput");
       const text = input.value.trim();
       if (text) {
-        socket.emit("chat message", { text });
+        socket.emit("chat message", { text, replyTo: replyToMessage ? replyToMessage.id : null });
         input.value = "";
+        clearReplyPreview();
       }
     }
     document.getElementById("sendBtn").addEventListener("click", sendMessage);
