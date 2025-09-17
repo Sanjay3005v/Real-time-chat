@@ -1,6 +1,7 @@
 const socket = io();
 let username = "";
 let avatarData = localStorage.getItem('avatarData') || '';
+let replyingTo = null; // Holds the ID of the message being replied to
 
 // --- UI Elements ---
 document.addEventListener('DOMContentLoaded', () => {
@@ -21,7 +22,6 @@ document.addEventListener('DOMContentLoaded', () => {
         messageInput.style.height = (messageInput.scrollHeight) + 'px';
     });
     
-    // Handle Enter key for sending (optional, can be removed)
     messageInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
@@ -29,7 +29,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Close emoji picker when clicking outside
     document.addEventListener('click', (e) => {
         const emojiPicker = document.getElementById('emojiPicker');
         if (!emojiPicker.contains(e.target) && !emojiBtn.contains(e.target)) {
@@ -53,7 +52,7 @@ function initialize() {
         showUserSettingsModal(true); // isFirstTime setup
     } else {
         updateUserPanel();
-        socket.emit("new user", { username, avatar: avatarData });
+        socket.emit("new user", { id: socket.id, username, avatar: avatarData });
     }
 }
 
@@ -122,7 +121,7 @@ function showUserSettingsModal(isFirstTime = false) {
         localStorage.setItem('avatarData', avatarData);
 
         updateUserPanel();
-        socket.emit(isFirstTime ? "new user" : "edit user", { username, avatar: avatarData });
+        socket.emit("edit user", { username, avatar: avatarData });
         document.getElementById('chatTitle').textContent = `Welcome, ${username}`;
         modal.style.display = 'none';
     };
@@ -137,49 +136,85 @@ socket.on("user list", (users) => {
     userList.innerHTML = "";
     users.forEach(user => {
         const li = document.createElement("li");
+        li.id = `user-${user.id}`;
         const avatarPlaceholder = `<div class="avatar-placeholder">${user.username.charAt(0).toUpperCase()}</div>`;
         const avatar = user.avatar ? `<img class="avatar" src="${user.avatar}" alt="${user.username}'s avatar">` : avatarPlaceholder;
-        li.innerHTML = `<div class="avatar-container">${avatar}</div> ${user.username}`;
+        li.innerHTML = `<div class="avatar-container">${avatar}</div> <span>${user.username}</span>`;
         userList.appendChild(li);
     });
+});
+
+socket.on("user updated", (user) => {
+    const userListItem = document.getElementById(`user-${user.id}`);
+    if (userListItem) {
+        const avatarPlaceholder = `<div class="avatar-placeholder">${user.username.charAt(0).toUpperCase()}</div>`;
+        const avatar = user.avatar ? `<img class="avatar" src="${user.avatar}" alt="${user.username}'s avatar">` : avatarPlaceholder;
+        userListItem.innerHTML = `<div class="avatar-container">${avatar}</div> <span>${user.username}</span>`;
+    }
 });
 
 socket.on("chat message", (msg) => {
     const messages = document.getElementById("messages");
     const li = document.createElement("li");
+    li.id = `msg-${msg.id}`;
 
     const avatarPlaceholder = `<div class="avatar-placeholder">${msg.username.charAt(0).toUpperCase()}</div>`;
     const avatarEl = msg.avatar ? `<img class="avatar" src="${msg.avatar}" alt="Avatar">` : avatarPlaceholder;
     const time = new Date(msg.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-    const textWithEmojis = twemoji.parse(msg.text, {
-        folder: 'svg',
-        ext: '.svg'
-    });
+    const textWithEmojis = twemoji.parse(msg.text, { folder: 'svg', ext: '.svg' });
+
+    let replyHTML = '';
+    if (msg.replyTo) {
+        const repliedMsg = document.getElementById(`msg-${msg.replyTo.id}`);
+        if (repliedMsg) {
+            const originalUsername = msg.replyTo.username;
+            const originalText = msg.replyTo.text;
+            replyHTML = `<div class="reply-content"><span class="username">${originalUsername}</span>: ${originalText}</div>`;
+        }
+    }
 
     li.innerHTML = `
         <div class="message-avatar">${avatarEl}</div>
         <div class="message-content">
+            ${replyHTML}
             <div>
                 <span class="username">${msg.username}</span>
                 <span class="timestamp">${time}</span>
             </div>
             <div class="message-text">${textWithEmojis}</div>
-        </div>`;
+        </div>
+        <button class="icon-btn reply-btn" onclick="setReplyTo('${msg.id}', '${msg.username}', '${msg.text}')"><i class="material-icons">reply</i></button>`;
 
     messages.appendChild(li);
     messages.scrollTop = messages.scrollHeight;
 });
+
 
 // --- Messaging ---
 function sendMessage() {
     const input = document.getElementById("messageInput");
     const text = input.value.trim();
     if (text) {
-        socket.emit("chat message", { text });
+        socket.emit("chat message", { text, replyTo: replyingTo });
         input.value = "";
         input.style.height = 'auto'; // Reset height
+        cancelReply(); // Clear reply state
     }
+}
+
+function setReplyTo(id, user, text) {
+    replyingTo = { id, username: user, text };
+    const banner = document.getElementById('replying-to-banner');
+    banner.innerHTML = `Replying to <strong>${user}</strong>: ${text.substring(0, 50)}... <span class="cancel-reply" onclick="cancelReply()">&times;</span>`;
+    banner.style.display = 'flex';
+    document.getElementById('messageInput').focus();
+}
+
+function cancelReply() {
+    replyingTo = null;
+    const banner = document.getElementById('replying-to-banner');
+    banner.style.display = 'none';
 }
 
 // --- Emoji Picker ---
@@ -195,7 +230,7 @@ function populateEmojiPicker() {
     emojis.forEach(emoji => {
         const emojiSpan = document.createElement('span');
         emojiSpan.className = 'emoji';
-        emojiSpan.textContent = emoji; // Use the actual character
+        emojiSpan.innerHTML = twemoji.parse(emoji, { folder: 'svg', ext: '.svg' });
         emojiSpan.onclick = () => {
             const input = document.getElementById('messageInput');
             input.value += emoji;
