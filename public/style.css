@@ -200,15 +200,37 @@ body {
 }
 
 .system-message {
+    display: flex;
+    align-items: center;
     text-align: center;
-    font-style: italic;
+    margin: 16px 0;
     color: var(--text-muted-dark);
-    margin: 10px 0;
-    font-size: 0.9em;
+    font-size: 0.875rem; /* 14px */
+    font-weight: 500;
+}
+
+.system-message::before,
+.system-message::after {
+    content: '';
+    flex-grow: 1;
+    border-bottom: 1px solid var(--secondary-dark);
+}
+
+.system-message:not(:empty)::before {
+    margin-right: .5em;
+}
+
+.system-message:not(:empty)::after {
+    margin-left: .5em;
 }
 
 .light-theme .system-message {
     color: var(--text-muted-light);
+}
+
+.light-theme .system-message::before,
+.light-theme .system-message::after {
+    border-color: #e3e5e8;
 }
 
 
