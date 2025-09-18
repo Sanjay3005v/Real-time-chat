@@ -199,6 +199,19 @@ body {
     vertical-align: middle;
 }
 
+.system-message {
+    text-align: center;
+    font-style: italic;
+    color: var(--text-muted-dark);
+    margin: 10px 0;
+    font-size: 0.9em;
+}
+
+.light-theme .system-message {
+    color: var(--text-muted-light);
+}
+
+
 .reply-content {
     background-color: rgba(0,0,0,0.1);
     padding: 4px 8px;

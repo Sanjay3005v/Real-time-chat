@@ -114,6 +114,7 @@ function showUserSettingsModal(isFirstTime = false) {
             return;
         }
 
+        const oldUsername = username;
         username = newName;
         avatarData = modalAvatarData;
 
@@ -121,7 +122,7 @@ function showUserSettingsModal(isFirstTime = false) {
         localStorage.setItem('avatarData', avatarData);
 
         updateUserPanel();
-        socket.emit("edit user", { username, avatar: avatarData });
+        socket.emit(isFirstTime ? "new user" : "edit user", { username, avatar: avatarData, oldUsername });
         document.getElementById('chatTitle').textContent = `Welcome, ${username}`;
         modal.style.display = 'none';
     };
@@ -144,12 +145,19 @@ socket.on("user list", (users) => {
     });
 });
 
-socket.on("user updated", (user) => {
-    const userListItem = document.getElementById(`user-${user.id}`);
+socket.on('user joined', (user) => {
+    appendSystemMessage(`${user.username} has joined the chat.`);
+});
+
+socket.on("user updated", (data) => {
+    const userListItem = document.getElementById(`user-${data.id}`);
     if (userListItem) {
-        const avatarPlaceholder = `<div class="avatar-placeholder">${user.username.charAt(0).toUpperCase()}</div>`;
-        const avatar = user.avatar ? `<img class="avatar" src="${user.avatar}" alt="${user.username}'s avatar">` : avatarPlaceholder;
-        userListItem.innerHTML = `<div class="avatar-container">${avatar}</div> <span>${user.username}</span>`;
+        const avatarPlaceholder = `<div class="avatar-placeholder">${data.username.charAt(0).toUpperCase()}</div>`;
+        const avatar = data.avatar ? `<img class="avatar" src="${data.avatar}" alt="${data.username}'s avatar">` : avatarPlaceholder;
+        userListItem.innerHTML = `<div class="avatar-container">${avatar}</div> <span>${data.username}</span>`;
+    }
+    if (data.oldUsername) {
+      appendSystemMessage(`${data.oldUsername} is now known as ${data.username}.`);
     }
 });
 
@@ -189,6 +197,16 @@ socket.on("chat message", (msg) => {
     messages.appendChild(li);
     messages.scrollTop = messages.scrollHeight;
 });
+
+
+function appendSystemMessage(message) {
+    const messages = document.getElementById("messages");
+    const li = document.createElement("li");
+    li.className = "system-message";
+    li.textContent = message;
+    messages.appendChild(li);
+    messages.scrollTop = messages.scrollHeight;
+}
 
 
 // --- Messaging ---
