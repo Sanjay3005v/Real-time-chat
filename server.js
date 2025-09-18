@@ -15,7 +15,7 @@ io.on("connection", (socket) => {
 
   socket.on("new user", ({ username, avatar }) => {
     users[socket.id] = { id: socket.id, username, avatar };
-    io.emit("system message", `🟢 ${username} joined`);
+    io.emit("system message", ` ${username} joined`);
     io.emit("user list", Object.values(users));
   });
 
@@ -43,7 +43,7 @@ io.on("connection", (socket) => {
     users[socket.id].username = newName;
     users[socket.id].avatar = avatar;
 
-    io.emit("system message", `✏️ ${oldName} is now ${newName}`);
+    io.emit("system message", ` ${oldName} is now ${newName}`);
     io.emit("user list", Object.values(users));
   });
 
