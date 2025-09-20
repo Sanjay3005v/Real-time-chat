@@ -8,14 +8,14 @@ const io = new Server(server);
 
 app.use(express.static("public"));
 
-const users = {}; // { socketId: { username, avatar } }
+const users = {}; // { socketId: { id, username, avatar } }
 
 io.on("connection", (socket) => {
   console.log("✅ User connected:", socket.id);
 
   socket.on("new user", ({ username, avatar }) => {
-    users[socket.id] = { username, avatar };
-    io.emit("system message", `🟢 ${username} joined`);
+    users[socket.id] = { id: socket.id, username, avatar };
+    io.emit("system message", ` ${username} joined`);
     io.emit("user list", Object.values(users));
   });
 
@@ -32,13 +32,18 @@ io.on("connection", (socket) => {
     });
   });
 
-  socket.on("edit name", ({ username: newName, avatar }) => {
-    if (!newName || typeof newName !== "string") return;
-    const user = users[socket.id] || { username: "Anonymous", avatar: "" };
+  socket.on("edit user", ({ username, avatar }) => {
+    if (!username || typeof username !== "string") return;
+    const user = users[socket.id];
+    if (!user) return;
+
     const oldName = user.username;
-    users[socket.id] = { username: newName.trim(), avatar };
-    io.emit("system message", `✏️ ${oldName} is now ${newName}`);
-    io.emit("update name", { id: socket.id, newName, avatar });
+    const newName = username.trim();
+    
+    users[socket.id].username = newName;
+    users[socket.id].avatar = avatar;
+
+    io.emit("system message", ` ${oldName} is now ${newName}`);
     io.emit("user list", Object.values(users));
   });
 
@@ -54,10 +59,12 @@ io.on("connection", (socket) => {
   });
 
   socket.on("disconnect", () => {
-    const user = users[socket.id]?.username || "Unknown";
-    delete users[socket.id];
-    io.emit("system message", `❌ ${user} left`);
-    io.emit("user list", Object.values(users));
+    const user = users[socket.id];
+    if (user) {
+      delete users[socket.id];
+      io.emit("system message", `❌ ${user.username} left`);
+      io.emit("user list", Object.values(users));
+    }
   });
 });
 
